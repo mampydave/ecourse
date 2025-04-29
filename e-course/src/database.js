@@ -2,17 +2,17 @@ import * as SQLite from 'expo-sqlite';
 
 let db;
 
-// Initialisation asynchrone de la base de données
+
 export const initDatabase = async () => {
   try {
-    // Utilisation de openDatabaseAsync
+
     db = await SQLite.openDatabaseAsync('shopping.db');
     await db.transaction(async tx => {
       await tx.executeSql(
         `CREATE TABLE IF NOT EXISTS shopping_items (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           name TEXT NOT NULL,
-          unit TEXT,  // Changement de category en unit
+          unit TEXT,  
           quantity INTEGER,
           date TEXT,
           bought INTEGER DEFAULT 0
@@ -26,12 +26,12 @@ export const initDatabase = async () => {
   }
 };
 
-// Fonction pour ajouter un article de manière asynchrone
+
 export const addItem = async (name, unit, quantity, date) => {
   try {
     await db.transaction(async tx => {
       await tx.executeSql(
-        'INSERT INTO shopping_items (name, unit, quantity, date, bought) VALUES (?, ?, ?, ?, 0);',  // Utilisation de unit
+        'INSERT INTO shopping_items (name, unit, quantity, date, bought) VALUES (?, ?, ?, ?, 0);',
         [name, unit, quantity, date]
       );
       console.log("Item added successfully");
@@ -41,12 +41,11 @@ export const addItem = async (name, unit, quantity, date) => {
   }
 };
 
-// Fonction pour mettre à jour un article de manière asynchrone
 export const updateItem = async (id, name, unit, quantity) => {
   try {
     await db.transaction(async tx => {
       await tx.executeSql(
-        'UPDATE shopping_items SET name = ?, unit = ?, quantity = ? WHERE id = ?;',  // Utilisation de unit
+        'UPDATE shopping_items SET name = ?, unit = ?, quantity = ? WHERE id = ?;', 
         [name, unit, quantity, id]
       );
       console.log("Item updated successfully");
@@ -56,7 +55,7 @@ export const updateItem = async (id, name, unit, quantity) => {
   }
 };
 
-// Fonction pour récupérer tous les articles de manière asynchrone
+
 export const fetchItems = async () => {
   try {
     const result = await new Promise((resolve, reject) => {

@@ -8,10 +8,10 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native'; // Utilisation de useNavigation
+import { useNavigation } from '@react-navigation/native'; 
 import { addItem } from './../database';
-import { Picker } from '@react-native-picker/picker'; // Import Picker pour la sélection
-import styles from '../../assets/style/styles'; // Importation du fichier de styles
+import { Picker } from '@react-native-picker/picker';
+import styles from '../../assets/style/styles'; 
 
 export default function AddProductScreen() {
   const navigation = useNavigation();
@@ -39,13 +39,13 @@ export default function AddProductScreen() {
     }
 
     setName('');
-    setUnit('kg'); // Réinitialiser l'unité après l'ajout
+    setUnit('kg');
     setQuantity(1);
   };
 
   const handleEdit = (item) => {
     setName(item.name);
-    setUnit(item.unit); // Réinitialiser l'unité lors de l'édition
+    setUnit(item.unit);
     setQuantity(item.quantity);
     setEditItemId(item.id);
   };
