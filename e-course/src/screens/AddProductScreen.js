@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import {
   View,
   TextInput,
@@ -8,18 +8,42 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native'; 
-import { addItem } from './../database';
+import { useNavigation } from '@react-navigation/native';
+import { addItem, getMaxIdCourse } from './../database';
 import { Picker } from '@react-native-picker/picker';
-import styles from '../../assets/style/styles'; 
+import styles from '../../assets/style/styles';
+import { CourseContext } from '../context/CourseContext';
 
 export default function AddProductScreen() {
+  const { idCourse } = useContext(CourseContext);
   const navigation = useNavigation();
+
+  const [activeIdCourse, setActiveIdCourse] = useState(null);
   const [name, setName] = useState('');
   const [unit, setUnit] = useState('kg');
   const [quantity, setQuantity] = useState(1);
   const [cartItems, setCartItems] = useState([]);
   const [editItemId, setEditItemId] = useState(null);
+
+  useEffect(() => {
+    const initializeCourseId = async () => {
+      if (idCourse !== null && idCourse !== undefined) {
+        setActiveIdCourse(idCourse);
+      } else {
+        const fallbackId = await getMaxIdCourse();
+        if (fallbackId) {
+          setActiveIdCourse(fallbackId);
+        } else {
+          Alert.alert(
+            'Aucune course en cours',
+            'Veuillez créer une course avant d’ajouter des produits.'
+          );
+          navigation.navigate('CourseScreen');
+        }
+      }
+    };
+    initializeCourseId();
+  }, [idCourse]);
 
   const handleAddOrEditItem = () => {
     if (!name || !unit || quantity <= 0) {
@@ -52,12 +76,12 @@ export default function AddProductScreen() {
 
   const handleDoCourse = () => {
     if (cartItems.length === 0) {
-      alert('Panier vide Ajoutez des produits avant de faire vos courses.');
+      Alert.alert('Panier vide', 'Ajoutez des produits avant de faire vos courses.');
       return;
     }
 
     cartItems.forEach((item) => {
-      addItem(item.name, item.unit, item.quantity, new Date().toISOString().split('T')[0]);
+      addItem(item.name, item.unit, item.quantity, new Date().toISOString().split('T')[0], activeIdCourse);
     });
 
     setCartItems([]);
@@ -82,6 +106,7 @@ export default function AddProductScreen() {
         style={styles.picker}
       >
         <Picker.Item label="kg" value="kg" />
+        <Picker.Item label="L" value="L" />
         <Picker.Item label="Divers" value="divers" />
       </Picker>
 

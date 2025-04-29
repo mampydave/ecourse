@@ -7,6 +7,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import AddProductScreen from './src/screens/AddProductScreen';
 import CourseScreen from './src/screens/CourseScreen';
 import StatisticsScreen from './src/screens/StatisticsScreen';
+import WelcomeScreen from './src/screens/WelcomeScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -58,6 +59,11 @@ export default function App() {
   return (
     <NavigationContainer>
       <Stack.Navigator>
+        <Stack.Screen
+          name="WelcomeScreen"
+          component={WelcomeScreen}
+          options={{ title: 'welcome' }}
+        />
         <Stack.Screen
           name="MainApp"
           component={MainApp}
