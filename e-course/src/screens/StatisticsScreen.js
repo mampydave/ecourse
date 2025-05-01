@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, Alert, StyleSheet } from 'react-native';
 import { db } from '../database';
 
 export default function StatisticsScreen() {
@@ -10,7 +10,7 @@ export default function StatisticsScreen() {
 
   const fetchStatistics = async () => {
     try {
-      const result = await db.transaction(async tx => {
+      await db.transaction(async tx => {
         const getItems = () => new Promise((resolve, reject) => {
           tx.executeSql(
             'SELECT name, unit, SUM(quantity) as total_quantity FROM shopping_items GROUP BY name ORDER BY total_quantity DESC',
@@ -65,27 +65,101 @@ export default function StatisticsScreen() {
     fetchStatistics();
   }, []);
 
+  const resetData = async () => {
+    Alert.alert(
+      "Réinitialiser les données",
+      "Êtes-vous sûr de vouloir supprimer toutes les données ?",
+      [
+        {
+          text: "Annuler",
+          style: "cancel"
+        },
+        {
+          text: "Confirmer",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await db.transaction(tx => {
+                tx.executeSql('DELETE FROM shopping_items');
+                tx.executeSql('DELETE FROM course');
+                tx.executeSql("DELETE FROM sqlite_sequence WHERE name = 'shopping_items'");
+                tx.executeSql("DELETE FROM sqlite_sequence WHERE name = 'course'");
+              });
+              setMostPurchasedItems([]);
+              setMonthlyPurchases(0);
+              setCompletedPercentage(0);
+              setTotalItems(0);
+              Alert.alert("Données réinitialisées avec succès.");
+            } catch (error) {
+              console.error("Erreur lors de la réinitialisation :", error);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   return (
-    <View style={{ padding: 20 }}>
-      <Text style={{ fontSize: 18, fontWeight: 'bold' }}>📊 Statistiques</Text>
+    <View style={styles.container}>
+      <Text style={styles.title}>📊 Statistiques</Text>
 
       <Text>Total des articles achetés : {totalItems}</Text>
       <Text>Articles achetés ce mois-ci : {monthlyPurchases}</Text>
       <Text>% d’achats terminés : {completedPercentage} %</Text>
 
-      <Text style={{ fontSize: 16, fontWeight: 'bold', marginTop: 20 }}>
-        🥇 Produits les plus achetés :
-      </Text>
+      <Text style={styles.subtitle}>🥇 Produits les plus achetés :</Text>
 
       <FlatList
         data={mostPurchasedItems}
         keyExtractor={(item, index) => index.toString()}
         renderItem={({ item }) => (
-          <View style={{ marginBottom: 10 }}>
+          <View style={styles.itemRow}>
             <Text>{item.name} - {item.total_quantity} {item.unit}</Text>
           </View>
         )}
       />
+
+      <TouchableOpacity style={styles.resetButton} onPress={resetData}>
+        <Text style={styles.resetButtonText}>🗑️ Réinitialiser les données</Text>
+      </TouchableOpacity>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    padding: 20,
+    backgroundColor: '#fff',
+    flex: 1
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 10
+  },
+  subtitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginTop: 20
+  },
+  itemRow: {
+    marginBottom: 10
+  },
+  resetButton: {
+    backgroundColor: '#d9534f',
+    padding: 14,
+    marginTop: 30,
+    borderRadius: 8,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 3 },
+    shadowRadius: 5,
+    elevation: 4
+  },
+  resetButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16
+  }
+});
