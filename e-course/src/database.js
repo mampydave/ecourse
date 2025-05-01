@@ -1,146 +1,190 @@
-import * as SQLite from 'expo-sqlite';
+import * as SQLite from 'expo-sqlite/next';
 
 let db;
 
-
 export const initDatabase = async () => {
   try {
-    db = await SQLite.openDatabaseAsync('shopping.db');
-    await db.transaction(async tx => {
-      
-      await tx.executeSql(
-        `CREATE TABLE IF NOT EXISTS course (
-          idCourse INTEGER PRIMARY KEY AUTOINCREMENT,
-          description TEXT
-        );`
-      );
+    db = await SQLite.openDatabaseAsync('shop.db');
+    console.log('Database initialized successfully');
+    
+    await db.runAsync('PRAGMA foreign_keys = ON;');
 
-      await tx.executeSql(
-        `CREATE TABLE IF NOT EXISTS shopping_items (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          name TEXT NOT NULL,
-          unit TEXT,
-          quantity INTEGER,
-          date TEXT,
-          bought INTEGER DEFAULT 0,
-          idCourse INTEGER,
-          status TEXT DEFAULT 'en cours',
-          FOREIGN KEY (idCourse) REFERENCES course(idCourse) ON DELETE SET NULL
-        );`
+    await db.runAsync(`
+      CREATE TABLE IF NOT EXISTS course (
+        idCourse INTEGER PRIMARY KEY AUTOINCREMENT,
+        description TEXT NOT NULL
       );
+    `);
 
-      console.log("Tables created successfully");
-    });
-    console.log("Database initialized");
+    await db.runAsync(`
+      CREATE TABLE IF NOT EXISTS shopping_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        unit TEXT,
+        quantity INTEGER,
+        date TEXT,
+        bought INTEGER DEFAULT 0,
+        idCourse INTEGER,
+        status TEXT DEFAULT 'en cours',
+        FOREIGN KEY (idCourse) REFERENCES course(idCourse) ON DELETE SET NULL
+      );
+    `);
+
+    return db;
   } catch (error) {
-    console.error("Error initializing database:", error);
+    console.error('Database initialization failed:', error);
+    throw error;
   }
 };
 
-export const getMaxIdCourse = async () => {
+const checkDbInitialized = () => {
+  if (!db) throw new Error("Database not initialized. Call initDatabase() first.");
+};
+
+export const createCourse = async (description) => {
+  checkDbInitialized();
+  
+  if (!description || description.trim() === '') {
+    throw new Error("Course description cannot be empty");
+  }
+
   try {
-    const result = await db.getAllAsync(
-      'SELECT MAX(idCourse) as maxId FROM course;'
+    const result = await db.runAsync(
+      'INSERT INTO course (description) VALUES (?);',
+      [description.trim()]
     );
     
-    if (result.length > 0 && result[0].maxId !== null) {
-      return result[0].maxId;
-    } else {
-      return 0;
-    }
+    console.log("Course created with ID:", result.lastInsertRowId);
+    return result.lastInsertRowId;
   } catch (error) {
-    console.error("Error fetching max idCourse:", error);
-    return null;
+    console.error("Error creating course:", error);
+    throw error;
   }
 };
 
+export const getLastCourseId = async () => {
+  checkDbInitialized();
+  const result = await db.getFirstAsync('SELECT MAX(idCourse) as id FROM course;');
+  return result?.id;
+};
 
+export const getInProgressItemsByCourse = async (idCourse) => {
+  checkDbInitialized();
+  return await db.getAllAsync(
+    'SELECT * FROM shopping_items WHERE idCourse = ? AND status = ?;',
+    [idCourse, 'en cours']
+  );
+};
 
 export const addItem = async (name, unit, quantity, date, idCourse) => {
+  checkDbInitialized();
+  
+  if (!name || name.trim() === '') {
+    throw new Error("Item name cannot be empty");
+  }
+
   try {
-    await db.transaction(async tx => {
-      await tx.executeSql(
-        'INSERT INTO shopping_items (name, unit, quantity, date, bought, idCourse) VALUES (?, ?, ?, ?, 0,?);',
-        [name, unit, quantity, date, idCourse]
-      );
-      console.log("Item added successfully");
-    });
+    const result = await db.runAsync(
+      'INSERT INTO shopping_items (name, unit, quantity, date, bought, idCourse) VALUES (?, ?, ?, ?, 0, ?);',
+      [name.trim(), unit, quantity, date, idCourse]
+    );
+    return result.lastInsertRowId;
   } catch (error) {
     console.error("Error adding item:", error);
+    throw error;
   }
 };
 
 export const updateItem = async (id, name, unit, quantity) => {
-  try {
-    await db.transaction(async tx => {
-      await tx.executeSql(
-        'UPDATE shopping_items SET name = ?, unit = ?, quantity = ? WHERE id = ?;', 
-        [name, unit, quantity, id]
-      );
-      console.log("Item updated successfully");
-    });
-  } catch (error) {
-    console.error("Error updating item:", error);
-  }
-};
-
-export const updateStatusToFinish = async (id) => {
-  try {
-    await db.transaction(async tx => {
-      await tx.executeSql(
-        'UPDATE shopping_items SET status = ? WHERE id = ?;',
-        ['finished', id]
-      );
-      console.log("Updated successfully");
-    });
-  } catch (error) {
-    console.error("Error updating status:", error);
-  }
-};
-
-export const updateStatusToSkip = async () => {
-  try {
-    await db.transaction(async tx => {
-      await tx.executeSql(
-        'UPDATE shopping_items SET status = ? WHERE status LIKE ?;',
-        ['skipped', '%en cours%']
-      );
-      console.log("Updated successfully");
-    });
-  } catch (error) {
-    console.error("Error updating status:", error);
-  }
+  checkDbInitialized();
+  await db.runAsync(
+    'UPDATE shopping_items SET name = ?, unit = ?, quantity = ? WHERE id = ?;',
+    [name, unit, quantity, id]
+  );
 };
 
 export const fetchItems = async () => {
-  try {
-    const result = await new Promise((resolve, reject) => {
-      db.transaction(tx => {
-        tx.executeSql(
-          'SELECT * FROM shopping_items;',  
-          [],
-          (_, { rows }) => resolve(rows._array),
-          (_, error) => reject(error)
-        );
-      });
-    });
-    console.log("Items fetched successfully", result);
-    return result;
-  } catch (error) {
-    console.error("Error fetching items:", error);
-  }
+  checkDbInitialized();
+  return await db.getAllAsync('SELECT * FROM shopping_items;');
 };
 
-
 export const getShopping_itemByIdCourse = async (idCourse) => {
-  try {
-    const result = await db.getAllAsync(
-      'SELECT * FROM shopping_items WHERE course_id = ?;',
-      [idCourse]
-    );
-    return result;
-  } catch (error) {
-    console.error("Erreur lors de la récupération des produits par course :", error);
-    return [];
-  }
+  checkDbInitialized();
+  return await db.getAllAsync(
+    'SELECT * FROM shopping_items WHERE idCourse = ?;',
+    [idCourse]
+  );
+};
+
+export const updateStatusToFinish = async (id) => {
+  checkDbInitialized();
+  console.log("id de course",id);
+  await db.runAsync(
+    'UPDATE shopping_items SET status = ? WHERE id = ?;',
+    ['finished', id]
+  );
+  console.log("finished");
+};
+
+export const updateStatusToSkip = async () => {
+  checkDbInitialized();
+  await db.runAsync(
+    'UPDATE shopping_items SET status = ? WHERE status LIKE ?;',
+    ['skipped', '%en cours%']
+  );
+};
+
+export const getMostPurchasedItems = async () => {
+  checkDbInitialized();
+  return await db.getAllAsync(`
+    SELECT name, unit, SUM(quantity) as total_quantity 
+    FROM shopping_items 
+    GROUP BY name 
+    ORDER BY total_quantity DESC;
+  `);
+};
+
+export const getMonthlyPurchases = async () => {
+  checkDbInitialized();
+  const result = await db.getFirstAsync(`
+    SELECT SUM(quantity) as month_total 
+    FROM shopping_items 
+    WHERE strftime('%Y-%m', date) = strftime('%Y-%m', 'now');
+  `);
+  return result?.month_total || 0;
+};
+
+export const getCompletionPercentage = async () => {
+  checkDbInitialized();
+  const result = await db.getFirstAsync(`
+    SELECT 
+      SUM(CASE WHEN status = 'finished' THEN 1 ELSE 0 END) as finished,
+      COUNT(*) as total 
+    FROM shopping_items;
+  `);
+  return result?.total > 0 ? ((result.finished / result.total) * 100).toFixed(1) : 0;
+};
+
+export const resetAllData = async () => {
+  checkDbInitialized();
+  await db.runAsync('DELETE FROM shopping_items;');
+  await db.runAsync('DELETE FROM course;');
+  await db.runAsync("DELETE FROM sqlite_sequence WHERE name = 'shopping_items';");
+  await db.runAsync("DELETE FROM sqlite_sequence WHERE name = 'course';");
+  return true;
+};
+
+export const getCoursesWithItems = async () => {
+  checkDbInitialized();
+  const courses = await db.getAllAsync('SELECT * FROM course;');
+  
+  return await Promise.all(
+    courses.map(async (course) => {
+      const items = await db.getAllAsync(
+        'SELECT * FROM shopping_items WHERE idCourse = ?;',
+        [course.idCourse]
+      );
+      return { ...course, items };
+    })
+  );
 };

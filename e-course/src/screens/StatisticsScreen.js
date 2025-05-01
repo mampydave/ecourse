@@ -1,6 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Alert, StyleSheet } from 'react-native';
-import { db } from '../database';
+import { View, Text, FlatList, TouchableOpacity, Alert, StyleSheet, Dimensions } from 'react-native';
+import {
+  BarChart,
+  PieChart,
+  ProgressChart
+} from 'react-native-chart-kit';
+import {
+  getMostPurchasedItems,
+  getMonthlyPurchases,
+  getCompletionPercentage,
+  resetAllData
+} from '../database';
+
+const screenWidth = Dimensions.get('window').width;
 
 export default function StatisticsScreen() {
   const [totalItems, setTotalItems] = useState(0);
@@ -10,52 +22,14 @@ export default function StatisticsScreen() {
 
   const fetchStatistics = async () => {
     try {
-      await db.transaction(async tx => {
-        const getItems = () => new Promise((resolve, reject) => {
-          tx.executeSql(
-            'SELECT name, unit, SUM(quantity) as total_quantity FROM shopping_items GROUP BY name ORDER BY total_quantity DESC',
-            [],
-            (_, { rows }) => resolve(rows._array),
-            (_, error) => reject(error)
-          );
-        });
+      const items = await getMostPurchasedItems();
+      const monthTotal = await getMonthlyPurchases();
+      const percentCompleted = await getCompletionPercentage();
 
-        const getMonthly = () => new Promise((resolve, reject) => {
-          tx.executeSql(
-            `SELECT SUM(quantity) as month_total FROM shopping_items 
-             WHERE strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')`,
-            [],
-            (_, { rows }) => resolve(rows._array[0]?.month_total || 0),
-            (_, error) => reject(error)
-          );
-        });
-
-        const getCompletion = () => new Promise((resolve, reject) => {
-          tx.executeSql(
-            `SELECT 
-               SUM(CASE WHEN status = 'finished' THEN 1 ELSE 0 END) as finished,
-               COUNT(*) as total 
-             FROM shopping_items`,
-            [],
-            (_, { rows }) => {
-              const finished = rows._array[0]?.finished || 0;
-              const total = rows._array[0]?.total || 0;
-              const percent = total > 0 ? (finished / total * 100).toFixed(1) : 0;
-              resolve(percent);
-            },
-            (_, error) => reject(error)
-          );
-        });
-
-        const items = await getItems();
-        const monthTotal = await getMonthly();
-        const percentCompleted = await getCompletion();
-
-        setMostPurchasedItems(items);
-        setMonthlyPurchases(monthTotal);
-        setCompletedPercentage(percentCompleted);
-        setTotalItems(items.reduce((sum, item) => sum + item.total_quantity, 0));
-      });
+      setMostPurchasedItems(items);
+      setMonthlyPurchases(monthTotal);
+      setCompletedPercentage(percentCompleted);
+      setTotalItems(items.reduce((sum, item) => sum + item.total_quantity, 0));
     } catch (error) {
       console.log('Erreur lors de la récupération des statistiques:', error);
     }
@@ -78,20 +52,13 @@ export default function StatisticsScreen() {
           text: "Confirmer",
           style: "destructive",
           onPress: async () => {
-            try {
-              await db.transaction(tx => {
-                tx.executeSql('DELETE FROM shopping_items');
-                tx.executeSql('DELETE FROM course');
-                tx.executeSql("DELETE FROM sqlite_sequence WHERE name = 'shopping_items'");
-                tx.executeSql("DELETE FROM sqlite_sequence WHERE name = 'course'");
-              });
+            const success = await resetAllData();
+            if (success) {
               setMostPurchasedItems([]);
               setMonthlyPurchases(0);
               setCompletedPercentage(0);
               setTotalItems(0);
               Alert.alert("Données réinitialisées avec succès.");
-            } catch (error) {
-              console.error("Erreur lors de la réinitialisation :", error);
             }
           }
         }
@@ -99,25 +66,82 @@ export default function StatisticsScreen() {
     );
   };
 
+  // Préparation des données pour les graphiques
+  const topProductsData = mostPurchasedItems.slice(0, 5).map(item => ({
+    name: item.name,
+    quantity: item.total_quantity,
+    color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
+    legendFontColor: '#7F7F7F',
+    legendFontSize: 12
+  }));
+
+  const barChartData = {
+    labels: mostPurchasedItems.slice(0, 5).map(item => item.name),
+    datasets: [{
+      data: mostPurchasedItems.slice(0, 5).map(item => item.total_quantity)
+    }]
+  };
+
+  const progressChartData = {
+    labels: ["Complétion"],
+    data: [completedPercentage / 100]
+  };
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>📊 Statistiques</Text>
 
-      <Text>Total des articles achetés : {totalItems}</Text>
-      <Text>Articles achetés ce mois-ci : {monthlyPurchases}</Text>
-      <Text>% d’achats terminés : {completedPercentage} %</Text>
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Progression des achats</Text>
+        <ProgressChart
+          data={progressChartData}
+          width={screenWidth - 40}
+          height={160}
+          chartConfig={chartConfig}
+          hideLegend={false}
+          style={styles.chart}
+        />
+        <Text style={styles.chartLabel}>{completedPercentage}% complétés</Text>
+      </View>
 
-      <Text style={styles.subtitle}>🥇 Produits les plus achetés :</Text>
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Top 5 des produits</Text>
+        <BarChart
+          data={barChartData}
+          width={screenWidth - 40}
+          height={220}
+          yAxisLabel=""
+          yAxisSuffix=""
+          chartConfig={chartConfig}
+          style={styles.chart}
+        />
+      </View>
 
-      <FlatList
-        data={mostPurchasedItems}
-        keyExtractor={(item, index) => index.toString()}
-        renderItem={({ item }) => (
-          <View style={styles.itemRow}>
-            <Text>{item.name} - {item.total_quantity} {item.unit}</Text>
-          </View>
-        )}
-      />
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Répartition des achats</Text>
+        <PieChart
+          data={topProductsData}
+          width={screenWidth - 40}
+          height={200}
+          chartConfig={chartConfig}
+          accessor="quantity"
+          backgroundColor="transparent"
+          paddingLeft="15"
+          absolute
+          style={styles.chart}
+        />
+      </View>
+
+      <View style={styles.statsRow}>
+        <View style={styles.statBox}>
+          <Text style={styles.statValue}>{totalItems}</Text>
+          <Text style={styles.statLabel}>Total achetés</Text>
+        </View>
+        <View style={styles.statBox}>
+          <Text style={styles.statValue}>{monthlyPurchases}</Text>
+          <Text style={styles.statLabel}>Ce mois-ci</Text>
+        </View>
+      </View>
 
       <TouchableOpacity style={styles.resetButton} onPress={resetData}>
         <Text style={styles.resetButtonText}>🗑️ Réinitialiser les données</Text>
@@ -126,36 +150,99 @@ export default function StatisticsScreen() {
   );
 }
 
+const chartConfig = {
+  backgroundColor: '#ffffff',
+  backgroundGradientFrom: '#ffffff',
+  backgroundGradientTo: '#ffffff',
+  decimalPlaces: 0,
+  color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
+  labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+  style: {
+    borderRadius: 16
+  },
+  propsForDots: {
+    r: '6',
+    strokeWidth: '2',
+    stroke: '#007AFF'
+  }
+};
+
 const styles = StyleSheet.create({
   container: {
     padding: 20,
-    backgroundColor: '#fff',
+    backgroundColor: '#f5f5f5',
     flex: 1
   },
   title: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 10
+    marginBottom: 20,
+    textAlign: 'center',
+    color: '#333'
   },
-  subtitle: {
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 15,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3
+  },
+  cardTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    marginTop: 20
+    fontWeight: '600',
+    marginBottom: 10,
+    color: '#444'
   },
-  itemRow: {
-    marginBottom: 10
+  chart: {
+    borderRadius: 8,
+    marginVertical: 8
+  },
+  chartLabel: {
+    textAlign: 'center',
+    marginTop: 5,
+    color: '#666'
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20
+  },
+  statBox: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 15,
+    width: '48%',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3
+  },
+  statValue: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#007AFF'
+  },
+  statLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 5
   },
   resetButton: {
     backgroundColor: '#d9534f',
-    padding: 14,
-    marginTop: 30,
-    borderRadius: 8,
+    padding: 16,
+    borderRadius: 12,
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowOffset: { width: 0, height: 3 },
-    shadowRadius: 5,
-    elevation: 4
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3
   },
   resetButtonText: {
     color: '#fff',

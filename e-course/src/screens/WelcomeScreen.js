@@ -1,7 +1,12 @@
 import React, { useContext, useState, useEffect } from 'react';
-import { View, TextInput, Text, TouchableOpacity, Alert, StyleSheet } from 'react-native';
+import { View, TextInput, Text, TouchableOpacity, Alert } from 'react-native';
 import { CourseContext } from '../context/CourseContext';
-import { db, updateStatusToSkip } from '../database';
+import {
+  getLastCourseId,
+  getInProgressItemsByCourse,
+  updateStatusToSkip,
+  createCourse as createCourseDB
+} from '../database';
 import styles from '../../assets/style/welcome';
 
 const WelcomeScreen = ({ navigation }) => {
@@ -9,19 +14,21 @@ const WelcomeScreen = ({ navigation }) => {
   const { setIdCourse } = useContext(CourseContext);
 
   useEffect(() => {
-    checkLastCourseStatus();
+    (async () => {
+      try {
+        await checkLastCourseStatus();
+      } catch (e) {
+        console.error("Erreur inattendue au lancement :", e);
+      }
+    })();
   }, []);
 
   const checkLastCourseStatus = async () => {
     try {
-      const lastCourse = await db.getFirstAsync('SELECT MAX(idCourse) as id FROM course');
-      if (!lastCourse?.id) return;
+      const lastCourseId = await getLastCourseId();
+      if (!lastCourseId) return;
 
-      const items = await db.getAllAsync(
-        'SELECT * FROM shopping_items WHERE idCourse = ? AND status = ?',
-        [lastCourse.id, 'en cours']
-      );
-
+      const items = await getInProgressItemsByCourse(lastCourseId);
       if (items.length > 0) {
         Alert.alert(
           "Course en cours",
@@ -30,8 +37,8 @@ const WelcomeScreen = ({ navigation }) => {
             {
               text: "Reprendre",
               onPress: () => {
-                setIdCourse(lastCourse.id);
-                navigation.replace('CourseScreen', { idCourse: lastCourse.id });
+                setIdCourse(lastCourseId);
+                navigation.replace('CourseScreen', { idCourse: lastCourseId });
               }
             },
             {
@@ -53,17 +60,23 @@ const WelcomeScreen = ({ navigation }) => {
     }
   };
 
-  const createCourse = async () => {
+  const handleCreateCourse = async () => {
+    if (!description.trim()) {
+      Alert.alert("Erreur", "La description ne peut pas être vide.");
+      return;
+    }
+  
     try {
-      await db.runAsync('INSERT INTO course (description) VALUES (?);', [description]);
-      const result = await db.getFirstAsync('SELECT MAX(idCourse) as id FROM course');
-      const newId = result.id;
-      setIdCourse(newId);
-      navigation.replace('MainApp');
+      const newId = await createCourseDB(description);
+      if (newId !== null) {
+        setIdCourse(newId);
+        navigation.replace('MainApp');
+      }
     } catch (error) {
       console.error("Échec de la création de la course :", error);
     }
   };
+  
 
   return (
     <View style={styles.container}>
@@ -75,7 +88,7 @@ const WelcomeScreen = ({ navigation }) => {
         style={styles.input}
         placeholderTextColor="#888"
       />
-      <TouchableOpacity style={styles.button} onPress={createCourse}>
+      <TouchableOpacity style={styles.button} onPress={handleCreateCourse}>
         <Text style={styles.buttonText}>Créer la course et commencer</Text>
       </TouchableOpacity>
     </View>
@@ -83,5 +96,3 @@ const WelcomeScreen = ({ navigation }) => {
 };
 
 export default WelcomeScreen;
-
-
