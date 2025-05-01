@@ -79,15 +79,40 @@ export default function AddProductScreen() {
       Alert.alert('Panier vide', 'Ajoutez des produits avant de faire vos courses.');
       return;
     }
+  
+    let hasEmptyName = false;
+  
+    cartItems.forEach((item) => {
+
+      item.name = item.name.trim();
+  
+
+      if (!item.name || item.name === '') {
+        hasEmptyName = true;
+        console.log('Nom vide pour l\'élément:', item);
+      }
+    });
+  
+    if (hasEmptyName) {
+      Alert.alert('Erreur', 'Un ou plusieurs produits ont un nom vide. Veuillez corriger.');
+      return;
+    }
+  
 
     cartItems.forEach((item) => {
-      addItem(item.name, item.unit, item.quantity, new Date().toISOString().split('T')[0], activeIdCourse);
-    });
+      console.log('Ajout de l\'élément:' , item);
 
+      addItem(item.name, item.unit, item.quantity, new Date().toISOString().split('T')[0], activeIdCourse)
+        .catch((error) => {
+          console.error("Erreur d'ajout d'élément:", error);
+        });
+    });
+  
     setCartItems([]);
     Alert.alert('Succès', 'Les produits ont été ajoutés avec succès.');
     navigation.navigate('CourseScreen', { cartItems });
   };
+  
 
   return (
     <View style={styles.container}>

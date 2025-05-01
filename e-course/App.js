@@ -1,5 +1,6 @@
 import 'react-native-gesture-handler';
 import * as React from 'react';
+import { Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -8,6 +9,10 @@ import AddProductScreen from './src/screens/AddProductScreen';
 import CourseScreen from './src/screens/CourseScreen';
 import StatisticsScreen from './src/screens/StatisticsScreen';
 import WelcomeScreen from './src/screens/WelcomeScreen';
+import HomeScreen from './src/screens/HomeScreen';
+import { CourseProvider } from './src/context/CourseContext';
+import ListScreen from './src/screens/ListScreen';
+import { DatabaseProvider, useDatabase } from './src/context/DatabaseContext';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -22,6 +27,8 @@ function MainApp() {
             iconName = focused ? 'cart' : 'cart-outline';
           } else if (route.name === 'Statistics') {
             iconName = focused ? 'stats-chart' : 'stats-chart-outline';
+          } else if (route.name === 'List') {
+            iconName = focused ? 'list' : 'list-outline';
           }
           return <Ionicons name={iconName} size={size} color={color} />;
         },
@@ -37,44 +44,38 @@ function MainApp() {
         tabBarInactiveTintColor: 'gray',
       })}
     >
-      <Tab.Screen
-        name="AddProduct"
-        component={AddProductScreen}
-        options={{
-          tabBarLabel: 'Ajout',
-        }}
-      />
-      <Tab.Screen
-        name="Statistics"
-        component={StatisticsScreen}
-        options={{
-          tabBarLabel: 'Statistiques',
-        }}
-      />
+      <Tab.Screen name="AddProduct" component={AddProductScreen} options={{ tabBarLabel: 'Ajout' }} />
+      <Tab.Screen name="Statistics" component={StatisticsScreen} options={{ tabBarLabel: 'Statistiques' }} />
+      <Tab.Screen name="List" component={ListScreen} options={{ tabBarLabel: 'List' }} />
     </Tab.Navigator>
+  );
+}
+
+function RootApp() {
+  const { isDbReady } = useDatabase();
+
+  if (!isDbReady) {
+    return <Text>Chargement de la base de données...</Text>;
+  }
+
+  return (
+    <NavigationContainer>
+      <Stack.Navigator>
+        <Stack.Screen name="HomeScreen" component={HomeScreen} options={{ title: 'welcome' }} />
+        <Stack.Screen name="WelcomeScreen" component={WelcomeScreen} options={{ title: 'Course' }} />
+        <Stack.Screen name="MainApp" component={MainApp} options={{ headerShown: false }} />
+        <Stack.Screen name="CourseScreen" component={CourseScreen} options={{ title: 'Course' }} />
+      </Stack.Navigator>
+    </NavigationContainer>
   );
 }
 
 export default function App() {
   return (
-    <NavigationContainer>
-      <Stack.Navigator>
-        <Stack.Screen
-          name="WelcomeScreen"
-          component={WelcomeScreen}
-          options={{ title: 'welcome' }}
-        />
-        <Stack.Screen
-          name="MainApp"
-          component={MainApp}
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen
-          name="CourseScreen"
-          component={CourseScreen}
-          options={{ title: 'Course' }}
-        />
-      </Stack.Navigator>
-    </NavigationContainer>
+    <DatabaseProvider>
+      <CourseProvider>
+        <RootApp />
+      </CourseProvider>
+    </DatabaseProvider>
   );
 }
