@@ -1,6 +1,6 @@
 import 'react-native-gesture-handler';
 import * as React from 'react';
-import { Text } from 'react-native';
+import { Text , StatusBar } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -61,6 +61,7 @@ function RootApp() {
   return (
     <NavigationContainer>
       <Stack.Navigator>
+        
         <Stack.Screen name="HomeScreen" component={HomeScreen} options={{ title: 'welcome' }} />
         <Stack.Screen name="WelcomeScreen" component={WelcomeScreen} options={{ title: 'Course' }} />
         <Stack.Screen name="MainApp" component={MainApp} options={{ headerShown: false }} />
@@ -74,6 +75,7 @@ export default function App() {
   return (
     <DatabaseProvider>
       <CourseProvider>
+        <StatusBar barStyle="light-content" backgroundColor="black" />
         <RootApp />
       </CourseProvider>
     </DatabaseProvider>

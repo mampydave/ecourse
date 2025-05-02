@@ -1,5 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Alert, StyleSheet, Dimensions } from 'react-native';
+import { 
+  View, 
+  Text, 
+  ScrollView, 
+  TouchableOpacity, 
+  Alert, 
+  StyleSheet, 
+  Dimensions,
+  RefreshControl 
+} from 'react-native';
 import {
   BarChart,
   PieChart,
@@ -19,9 +28,11 @@ export default function StatisticsScreen() {
   const [mostPurchasedItems, setMostPurchasedItems] = useState([]);
   const [monthlyPurchases, setMonthlyPurchases] = useState(0);
   const [completedPercentage, setCompletedPercentage] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
   const fetchStatistics = async () => {
     try {
+      setRefreshing(true);
       const items = await getMostPurchasedItems();
       const monthTotal = await getMonthlyPurchases();
       const percentCompleted = await getCompletionPercentage();
@@ -32,6 +43,9 @@ export default function StatisticsScreen() {
       setTotalItems(items.reduce((sum, item) => sum + item.total_quantity, 0));
     } catch (error) {
       console.log('Erreur lors de la récupération des statistiques:', error);
+      Alert.alert('Erreur', 'Impossible de charger les statistiques');
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -54,11 +68,8 @@ export default function StatisticsScreen() {
           onPress: async () => {
             const success = await resetAllData();
             if (success) {
-              setMostPurchasedItems([]);
-              setMonthlyPurchases(0);
-              setCompletedPercentage(0);
-              setTotalItems(0);
-              Alert.alert("Données réinitialisées avec succès.");
+              await fetchStatistics();
+              Alert.alert("Succès", "Données réinitialisées avec succès.");
             }
           }
         }
@@ -67,16 +78,16 @@ export default function StatisticsScreen() {
   };
 
   // Préparation des données pour les graphiques
-  const topProductsData = mostPurchasedItems.slice(0, 5).map(item => ({
+  const topProductsData = mostPurchasedItems.slice(0, 5).map((item, index) => ({
     name: item.name,
     quantity: item.total_quantity,
-    color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
+    color: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF'][index],
     legendFontColor: '#7F7F7F',
     legendFontSize: 12
   }));
 
   const barChartData = {
-    labels: mostPurchasedItems.slice(0, 5).map(item => item.name),
+    labels: mostPurchasedItems.slice(0, 5).map(item => item.name.substring(0, 12) + (item.name.length > 12 ? '...' : '')),
     datasets: [{
       data: mostPurchasedItems.slice(0, 5).map(item => item.total_quantity)
     }]
@@ -88,7 +99,17 @@ export default function StatisticsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.contentContainer}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={fetchStatistics}
+          colors={['#007AFF']}
+        />
+      }
+    >
       <Text style={styles.title}>📊 Statistiques</Text>
 
       <View style={styles.card}>
@@ -99,7 +120,6 @@ export default function StatisticsScreen() {
           height={160}
           chartConfig={chartConfig}
           hideLegend={false}
-          style={styles.chart}
         />
         <Text style={styles.chartLabel}>{completedPercentage}% complétés</Text>
       </View>
@@ -113,7 +133,7 @@ export default function StatisticsScreen() {
           yAxisLabel=""
           yAxisSuffix=""
           chartConfig={chartConfig}
-          style={styles.chart}
+          verticalLabelRotation={30}
         />
       </View>
 
@@ -128,7 +148,6 @@ export default function StatisticsScreen() {
           backgroundColor="transparent"
           paddingLeft="15"
           absolute
-          style={styles.chart}
         />
       </View>
 
@@ -143,10 +162,19 @@ export default function StatisticsScreen() {
         </View>
       </View>
 
-      <TouchableOpacity style={styles.resetButton} onPress={resetData}>
-        <Text style={styles.resetButtonText}>🗑️ Réinitialiser les données</Text>
+      <TouchableOpacity 
+        style={styles.resetButton} 
+        onPress={resetData}
+        disabled={refreshing}
+      >
+        <Text style={styles.resetButtonText}>
+          {refreshing ? 'Chargement...' : '🗑️ Réinitialiser les données'}
+        </Text>
       </TouchableOpacity>
-    </View>
+      
+      {/* Espace supplémentaire pour le défilement */}
+      <View style={styles.spacer} />
+    </ScrollView>
   );
 }
 
@@ -157,21 +185,19 @@ const chartConfig = {
   decimalPlaces: 0,
   color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
   labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-  style: {
-    borderRadius: 16
-  },
-  propsForDots: {
-    r: '6',
-    strokeWidth: '2',
-    stroke: '#007AFF'
+  propsForLabels: {
+    fontSize: 10
   }
 };
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5'
+  },
+  contentContainer: {
     padding: 20,
-    backgroundColor: '#f5f5f5',
-    flex: 1
+    paddingBottom: 40
   },
   title: {
     fontSize: 24,
@@ -197,14 +223,11 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     color: '#444'
   },
-  chart: {
-    borderRadius: 8,
-    marginVertical: 8
-  },
   chartLabel: {
     textAlign: 'center',
     marginTop: 5,
-    color: '#666'
+    color: '#666',
+    fontSize: 14
   },
   statsRow: {
     flexDirection: 'row',
@@ -242,11 +265,15 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 6,
-    elevation: 3
+    elevation: 3,
+    opacity: 1
   },
   resetButtonText: {
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 16
+  },
+  spacer: {
+    height: 40
   }
 });
