@@ -176,15 +176,30 @@ export const resetAllData = async () => {
 
 export const getCoursesWithItems = async () => {
   checkDbInitialized();
-  const courses = await db.getAllAsync('SELECT * FROM course;');
-  
-  return await Promise.all(
-    courses.map(async (course) => {
-      const items = await db.getAllAsync(
-        'SELECT * FROM shopping_items WHERE idCourse = ?;',
-        [course.idCourse]
-      );
-      return { ...course, items };
-    })
-  );
+  try {
+    const courses = await db.getAllAsync('SELECT * FROM course ORDER BY idCourse DESC;');
+    
+    const coursesWithItems = await Promise.all(
+      courses.map(async (course) => {
+        try {
+          const items = await db.getAllAsync(
+            'SELECT id, name, unit, quantity, date, status FROM shopping_items WHERE idCourse = ?;',
+            [course.idCourse]
+          );
+          return { 
+            ...course, 
+            items: items || [] 
+          };
+        } catch (error) {
+          console.error(`Error fetching items for course ${course.idCourse}:`, error);
+          return { ...course, items: [] };
+        }
+      })
+    );
+
+    return coursesWithItems;
+  } catch (error) {
+    console.error("Error in getCoursesWithItems:", error);
+    throw error;
+  }
 };

@@ -77,7 +77,7 @@ export default function StatisticsScreen() {
     );
   };
 
-
+  // Préparation des données pour les graphiques
   const topProductsData = mostPurchasedItems.slice(0, 5).map((item, index) => ({
     name: item.name,
     quantity: item.total_quantity,
@@ -172,7 +172,7 @@ export default function StatisticsScreen() {
         </Text>
       </TouchableOpacity>
       
-
+      {/* Espace supplémentaire pour le défilement */}
       <View style={styles.spacer} />
     </ScrollView>
   );
